@@ -84,6 +84,7 @@ export async function createWiseInvoice(
     return {
       wise_invoice_id: invoiceId,
       invoice_number: invoiceNumber,
+      invoice_link: data.link,
       profile_id: WISE_PROFILE_ID1,
       payment_request_id: invoiceId,
       amount: totalAmount,
