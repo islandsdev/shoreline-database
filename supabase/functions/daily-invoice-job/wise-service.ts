@@ -2,35 +2,83 @@ export async function createWiseInvoice(
   WISE_API_KEY1,
   WISE_BALANCE_ID1,
   WISE_PROFILE_ID1,
-  items
+  items,
+  companyName,
+  companyEmail
 ) {
   try {
-    const lineitems = items.map((item, index) => ({
-      name: item.description,
-      unitPrice: {
-        value: item.amount,
-        currency: "USD",
-      },
-      quantity: 1,
-      tax: null,
-      rank: index,
-    }));
+    console.log("=== Wise Invoice Creation Started ===");
+    console.log("Input parameters:", {
+      hasApiKey: !!WISE_API_KEY1,
+      balanceId: WISE_BALANCE_ID1,
+      profileId: WISE_PROFILE_ID1,
+      itemsCount: items?.length || 0,
+      companyName: companyName,
+      companyEmail: companyEmail,
+    });
+
+    // Validate inputs
+    if (!items || items.length === 0) {
+      throw new Error("No items provided for invoice");
+    }
+    if (!companyName) {
+      console.warn("Warning: companyName is missing or empty");
+    }
+    if (!companyEmail) {
+      console.warn("Warning: companyEmail is missing or empty");
+    }
+
+    const lineitems = items.map((item, index) => {
+      const lineItem = {
+        name: item.description,
+        unitPrice: {
+          value: item.amount,
+          currency: "USD",
+        },
+        quantity: 1,
+        tax: null,
+        rank: index,
+      };
+      console.log(`Line item ${index}:`, {
+        name: lineItem.name,
+        value: lineItem.unitPrice.value,
+        currency: lineItem.unitPrice.currency,
+      });
+      return lineItem;
+    });
+
     const issueDate = new Date();
     const dueAt = new Date(issueDate);
     dueAt.setDate(dueAt.getDate() + 7);
+
+    console.log("Date information:", {
+      issueDate: issueDate.toISOString(),
+      dueAt: dueAt.toISOString(),
+    });
+
     const body = {
       requestType: "INVOICE",
       selectedPaymentMethods: ["WISE_ACCOUNT", "ACCOUNT_DETAILS"],
       balanceId: WISE_BALANCE_ID1,
-      dueAt,
-      issueDate,
+      dueAt: dueAt.toISOString(),
+      issueDate: issueDate.toISOString(),
       payer: {
-        name: "test full name",
-        email: "testemail@gmail.com",
+        name: companyName || "Company",
+        email: companyEmail || "billing@company.com",
         locale: "en",
       },
       lineItems: lineitems,
     };
+
+    console.log(
+      "Request body being sent to Wise API:",
+      JSON.stringify(body, null, 2)
+    );
+    console.log(
+      "Request URL:",
+      `https://wise.com/gateway/v2/profiles/${WISE_PROFILE_ID1}/acquiring/payment-requests`
+    );
+
     const res = await fetch(
       `https://wise.com/gateway/v2/profiles/${WISE_PROFILE_ID1}/acquiring/payment-requests`,
       {
@@ -42,17 +90,43 @@ export async function createWiseInvoice(
         body: JSON.stringify(body),
       }
     );
+
+    console.log("Wise API Response Status:", res.status, res.statusText);
     const data = await res.json();
+    console.log("Wise API Response Data:", JSON.stringify(data, null, 2));
+
     if (!res.ok) {
+      console.error("Wise API Error Details:", {
+        status: res.status,
+        statusText: res.statusText,
+        error: data,
+        errorMessage: data.error?.message,
+        errorCode: data.error?.code,
+        errors: data.errors,
+      });
       throw new Error(
         data.error?.message ||
-          `Invoice creation failed with status ${res.status}`
+          data.message ||
+          `Invoice creation failed with status ${res.status}: ${JSON.stringify(
+            data
+          )}`
       );
     }
     const invoiceId = data.id;
+    console.log("Invoice created successfully with ID:", invoiceId);
+
     const body2 = {
       status: "PUBLISHED",
     };
+    console.log(
+      "Publishing invoice with body:",
+      JSON.stringify(body2, null, 2)
+    );
+    console.log(
+      "Publish URL:",
+      `https://wise.com/gateway/v1/profiles/${WISE_PROFILE_ID1}/acquiring/payment-requests/${invoiceId}/status`
+    );
+
     const res2 = await fetch(
       `https://wise.com/gateway/v1/profiles/${WISE_PROFILE_ID1}/acquiring/payment-requests/${invoiceId}/status`,
       {
@@ -65,11 +139,26 @@ export async function createWiseInvoice(
       }
     );
 
+    console.log("Publish Response Status:", res2.status, res2.statusText);
+    const publishData = await res2.json();
+    console.log("Publish Response Data:", JSON.stringify(publishData, null, 2));
+
     if (!res2.ok) {
-      const errorData = await res2.json();
+      console.error("Invoice Publishing Error Details:", {
+        status: res2.status,
+        statusText: res2.statusText,
+        error: publishData,
+        errorMessage: publishData.error?.message,
+        errorCode: publishData.error?.code,
+        errors: publishData.errors,
+      });
+      const errorData = publishData;
       throw new Error(
         errorData.error?.message ||
-          `Invoice publishing failed with status ${res2.status}`
+          errorData.message ||
+          `Invoice publishing failed with status ${
+            res2.status
+          }: ${JSON.stringify(errorData)}`
       );
     }
 
@@ -93,6 +182,12 @@ export async function createWiseInvoice(
       created_at: new Date(),
     };
   } catch (error) {
+    console.error("=== Wise Invoice Creation Error ===");
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
+    if (error.response) {
+      console.error("Error response:", error.response);
+    }
     throw new Error(`Invoice creation failed: ${error.message}`);
   }
 }

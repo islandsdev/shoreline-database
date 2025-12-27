@@ -46,7 +46,8 @@ export class DatabaseService {
         id,
         legal_name,
         payment_method,
-        customer_stripe_id
+        customer_stripe_id,
+        billing_email
       ),
       rrsp_plan:rrsp_plan_id(*)
     ),
@@ -174,6 +175,7 @@ export class DatabaseService {
       .from("invoices")
       .insert({
         company_id: companyId,
+        invoice_link: invoice.invoice_link,
         invoice_number: invoiceNumber,
         status: normalizedStatus,
         amount: amount,
