@@ -15,7 +15,9 @@ export async function createInvoiceAndItems(customerId, items) {
 export async function createInvoice(customerId) {
   const body = new URLSearchParams({
     customer: customerId,
-    collection_method: "send_invoice",
+    // collection_method: "send_invoice",
+    // days_until_due: "1",
+    collection_method: "charge_automatically",
     auto_advance: "true",
   });
   const res = await fetch("https://api.stripe.com/v1/invoices", {
