@@ -6,59 +6,83 @@ import { ENV } from "./.envs.ts";
 // CORS Headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 async function handler(req) {
   // Handle preflight request
   if (req.method === "OPTIONS") {
     return new Response("ok", {
-      headers: corsHeaders
+      headers: corsHeaders,
     });
   }
   try {
     const dbService = new DatabaseService(ENV.SUPABASE_URL, ENV.SUPABASE_KEY);
     // Fetch data concurrently
     const scheduleIds = await dbService.getScheduleIds();
-    const [paystubs, oneTimePayments, forexRate, groupInvestmentTopups] = await Promise.all([
-      dbService.getPaystubs(scheduleIds),
-      dbService.getOneTimePayments(scheduleIds),
-      dbService.getForexRate(),
-      dbService.getGroupInvestmentTopups()
-    ]);
-    if ((!paystubs || paystubs.length === 0) && (!oneTimePayments || oneTimePayments.length === 0)) {
+    const [paystubs, oneTimePayments, forexRate, groupInvestmentTopups] =
+      await Promise.all([
+        dbService.getPaystubs(scheduleIds),
+        dbService.getOneTimePayments(scheduleIds),
+        dbService.getForexRate(),
+        dbService.getGroupInvestmentTopups(),
+      ]);
+    if (
+      (!paystubs || paystubs.length === 0) &&
+      (!oneTimePayments || oneTimePayments.length === 0)
+    ) {
       console.log(`Nothing found to process`);
-      return jsonResponse({
-        message: "Nothing found to process",
-        total_processed: 0
-      }, 200);
+      return jsonResponse(
+        {
+          message: "Nothing found to process",
+          total_processed: 0,
+        },
+        200
+      );
     }
-    const companiesData = groupByCompany(paystubs, oneTimePayments, forexRate?.rate, groupInvestmentTopups);
+    const companiesData = groupByCompany(
+      paystubs,
+      oneTimePayments,
+      forexRate?.rate,
+      groupInvestmentTopups
+    );
     if (companiesData.length === 0) {
-      return jsonResponse({
-        message: "No company data found to process",
-        total_processed: 0
-      }, 200);
+      return jsonResponse(
+        {
+          message: "No company data found to process",
+          total_processed: 0,
+        },
+        200
+      );
     }
-    console.log(`Starting invoice processing for ${companiesData.length} companies`);
+    console.log(
+      `Starting invoice processing for ${companiesData.length} companies`
+    );
     const startTime = Date.now();
     // Process invoices with the refactored service
-    const processingResult = await createInvoiceAndItemsForAllCompanies(dbService, ENV.STRIPE_API_KEY, ENV.WISE_API_KEY, ENV.WISE_BALANCE_ID, ENV.WISE_PROFILE_ID, companiesData);
+    const processingResult = await createInvoiceAndItemsForAllCompanies(
+      dbService,
+      companiesData
+    );
     const endTime = Date.now();
     const processingTime = endTime - startTime;
     console.log(`Invoice processing completed in ${processingTime}ms`);
     return jsonResponse({
       message: "Invoice processing completed successfully",
       processing_time_ms: processingTime,
-      companies_data: companiesData
+      companies_data: companiesData,
     });
   } catch (error) {
     console.error("Error processing request:", error);
     // Return more detailed error information
-    return jsonResponse({
-      error: "Internal Server Error",
-      message: error.message || "An unexpected error occurred",
-      timestamp: new Date().toISOString()
-    }, 500);
+    return jsonResponse(
+      {
+        error: "Internal Server Error",
+        message: error.message || "An unexpected error occurred",
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
   }
 }
 function jsonResponse(data, status = 200) {
@@ -66,8 +90,8 @@ function jsonResponse(data, status = 200) {
     status,
     headers: {
       ...corsHeaders,
-      "Content-Type": "application/json"
-    }
+      "Content-Type": "application/json",
+    },
   });
 }
 serve(handler);

@@ -4,7 +4,7 @@ import { createWiseInvoice } from "./wise-service.ts";
 const config = getConfig();
 // Validate configuration on module load
 validateConfig(config);
-export async function createInvoiceAndItemsForAllCompanies(dbService, STRIPE_API_KEY1, WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PROFILE_ID1, companiesData) {
+export async function createInvoiceAndItemsForAllCompanies(dbService, companiesData) {
   const results = [];
   const errors = [];
   console.log(`Starting invoice processing with batch size: ${config.BATCH_SIZE}, max retries: ${config.MAX_RETRIES}`);
@@ -17,7 +17,7 @@ export async function createInvoiceAndItemsForAllCompanies(dbService, STRIPE_API
     // Process batch concurrently and wait for all to complete
     const batchPromises = batch.map(async (company)=>{
       try {
-        const result = await processCompany(STRIPE_API_KEY1, WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PROFILE_ID1, company, dbService);
+        const result = await processCompany(company, dbService);
         results.push(result);
         return result;
       } catch (error) {
@@ -60,13 +60,13 @@ export async function createInvoiceAndItemsForAllCompanies(dbService, STRIPE_API
     }
   };
 }
-async function processCompany(STRIPE_API_KEY1, WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PROFILE_ID1, company, dbService) {
+async function processCompany(company, dbService) {
   try {
     if (company.payment_method === "Stripe") {
       if (!company.company_stripe_id) {
         throw new Error(`Company ${company.company_name} has Stripe payment method but no Stripe customer ID`);
       }
-      const invoice = await createInvoiceAndItems(STRIPE_API_KEY1, company.company_stripe_id, company.invoices);
+      const invoice = await createInvoiceAndItems(company.company_stripe_id, company.invoices);
       const invoiceId = await dbService.saveInvoice(company.company_id, company.paystubIds, company.oneTimePaymentIds, invoice, "Stripe");
       return {
         company_id: company.company_id,
@@ -77,7 +77,7 @@ async function processCompany(STRIPE_API_KEY1, WISE_API_KEY1, WISE_BALANCE_ID1, 
         timestamp: new Date().toISOString()
       };
     } else if (company.payment_method === "Wise") {
-      const wiseInvoice = await createWiseInvoice(WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PROFILE_ID1, company.invoices, company.company_name, company.billing_email);
+      const wiseInvoice = await createWiseInvoice(company.invoices, company.company_name, company.billing_email);
       const invoiceId = await dbService.saveInvoice(company.company_id, company.paystubIds, company.oneTimePaymentIds, wiseInvoice, "Wise");
       return {
         company_id: company.company_id,

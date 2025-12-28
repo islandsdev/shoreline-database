@@ -1,10 +1,12 @@
-export async function createWiseInvoice(WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PROFILE_ID1, items, companyName, companyEmail) {
+import { ENV } from "./.envs.ts";
+
+export async function createWiseInvoice(items, companyName, companyEmail) {
   try {
     console.log("=== Wise Invoice Creation Started ===");
     console.log("Input parameters:", {
-      hasApiKey: !!WISE_API_KEY1,
-      balanceId: WISE_BALANCE_ID1,
-      profileId: WISE_PROFILE_ID1,
+      hasApiKey: !!ENV.WISE_API_KEY,
+      balanceId: ENV.WISE_BALANCE_ID,
+      profileId: ENV.WISE_PROFILE_ID,
       itemsCount: items?.length || 0,
       companyName: companyName,
       companyEmail: companyEmail
@@ -50,7 +52,7 @@ export async function createWiseInvoice(WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PR
         "WISE_ACCOUNT",
         "ACCOUNT_DETAILS"
       ],
-      balanceId: WISE_BALANCE_ID1,
+      balanceId: ENV.WISE_BALANCE_ID,
       dueAt: dueAt.toISOString(),
       issueDate: issueDate.toISOString(),
       payer: {
@@ -61,11 +63,11 @@ export async function createWiseInvoice(WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PR
       lineItems: lineitems
     };
     console.log("Request body being sent to Wise API:", JSON.stringify(body, null, 2));
-    console.log("Request URL:", `https://wise.com/gateway/v2/profiles/${WISE_PROFILE_ID1}/acquiring/payment-requests`);
-    const res = await fetch(`https://wise.com/gateway/v2/profiles/${WISE_PROFILE_ID1}/acquiring/payment-requests`, {
+    console.log("Request URL:", `https://wise.com/gateway/v2/profiles/${ENV.WISE_PROFILE_ID}/acquiring/payment-requests`);
+    const res = await fetch(`https://wise.com/gateway/v2/profiles/${ENV.WISE_PROFILE_ID}/acquiring/payment-requests`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${WISE_API_KEY1}`,
+        Authorization: `Bearer ${ENV.WISE_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(body)
@@ -90,11 +92,11 @@ export async function createWiseInvoice(WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PR
       status: "PUBLISHED"
     };
     console.log("Publishing invoice with body:", JSON.stringify(body2, null, 2));
-    console.log("Publish URL:", `https://wise.com/gateway/v1/profiles/${WISE_PROFILE_ID1}/acquiring/payment-requests/${invoiceId}/status`);
-    const res2 = await fetch(`https://wise.com/gateway/v1/profiles/${WISE_PROFILE_ID1}/acquiring/payment-requests/${invoiceId}/status`, {
+    console.log("Publish URL:", `https://wise.com/gateway/v1/profiles/${ENV.WISE_PROFILE_ID}/acquiring/payment-requests/${invoiceId}/status`);
+    const res2 = await fetch(`https://wise.com/gateway/v1/profiles/${ENV.WISE_PROFILE_ID}/acquiring/payment-requests/${invoiceId}/status`, {
       method: "PUT",
       headers: {
-        Authorization: `Bearer ${WISE_API_KEY1}`,
+        Authorization: `Bearer ${ENV.WISE_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(body2)
@@ -124,7 +126,7 @@ export async function createWiseInvoice(WISE_API_KEY1, WISE_BALANCE_ID1, WISE_PR
       wise_invoice_id: invoiceId,
       invoice_number: invoiceNumber,
       invoice_link: data.link,
-      profile_id: WISE_PROFILE_ID1,
+      profile_id: ENV.WISE_PROFILE_ID,
       payment_request_id: invoiceId,
       amount: totalAmount,
       status: "PUBLISHED",
