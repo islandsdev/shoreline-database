@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getEnv } from "./.envs.ts";
+import { ENV } from "./.envs.ts";
 /**
  * Normalizes invoice status to either "paid" or "processing"
  * @param status - The raw status from Wise
@@ -14,8 +14,7 @@ import { getEnv } from "./.envs.ts";
   // Only "paid" maps to "paid", everything else is "processing"
   return normalizedStatus === "paid" ? "paid" : "processing";
 }
-serve(async (req)=>{
-  const ENV = getEnv();
+serve(async (req) => {
   const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
   const rawBody = await req.text();
   const payload = JSON.parse(rawBody);

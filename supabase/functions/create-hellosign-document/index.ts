@@ -33,14 +33,13 @@ serve(async (req)=>{
     }
     // Send document with template
     const reqBody = await req.json();
-    const { subject, message, templateId, signers, customFields, companyId, employeeId, type, IS_TEST_ENV } = reqBody;
+    const { subject, message, templateId, signers, customFields, companyId, employeeId, type } = reqBody;
     const result = await helloSignService.sendDocumentWithTemplate({
       subject,
       message,
       templateId,
       signers,
       customFields,
-      IS_TEST_ENV
     });
     await dbService.saveHelloSignDocument(result.signature_request, companyId, employeeId, type);
     return new Response(JSON.stringify({

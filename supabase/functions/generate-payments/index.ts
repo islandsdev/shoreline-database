@@ -1,10 +1,9 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { getEnv } from './envs.ts';
+import { ENV } from './envs.ts';
 import { DatabaseService } from "./database-service.ts";
 console.info('server started');
 Deno.serve(async (req)=>{
-  const ENV = getEnv();
   const body = await req.json().catch(()=>({}));
   const teamMemberId = body.team_member_id;
   const dbService = new DatabaseService(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY);
