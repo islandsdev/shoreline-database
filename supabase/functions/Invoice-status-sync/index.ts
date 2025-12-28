@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "npm:stripe@14.0.0"; // Deno supports npm: prefix
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getEnv } from "./.envs.ts";
+import { ENV } from "./.envs.ts";
 
 /**
  * Normalizes invoice status to either "paid" or "processing"
@@ -20,7 +20,6 @@ function normalizeInvoiceStatus(status) {
   return normalizedStatus === "paid" ? "paid" : "processing";
 }
 serve(async (req) => {
-  const ENV = getEnv();
   // Stripe + Supabase setup
   let stripe, event;
   const supabase = createClient(
@@ -39,28 +38,10 @@ serve(async (req) => {
       ENV.STRIPE_INVOICE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error(
-      "⚠️  PROD Webhook signature verification failed:",
-      err.message
-    );
-    try {
-      stripe = new Stripe(ENV.STRIPE_API_KEY_TEST, {
-        apiVersion: "2024-06-20",
-      });
-      event = await stripe.webhooks.constructEventAsync(
-        body,
-        signature,
-        ENV.STRIPE_INVOICE_WEBHOOK_SECRET_TEST
-      );
-    } catch (err) {
-      console.error(
-        "⚠️  TEST Webhook signature verification failed:",
-        err.message
-      );
-      return new Response(`Webhook Error: ${err.message}`, {
-        status: 400,
-      });
-    }
+    console.error("⚠️  Webhook signature verification failed:", err.message);
+    return new Response(`Webhook Error: ${err.message}`, {
+      status: 400,
+    });
   }
   if (event.type.startsWith("invoice.")) {
     const invoice = event.data.object;

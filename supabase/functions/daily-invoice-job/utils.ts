@@ -6,11 +6,11 @@ function formatDateRange(startDateStr, endDateStr) {
   const endDate = new Date(endDateStr);
   const startStr = startDate.toLocaleString("en-US", {
     month: "short",
-    day: "numeric",
+    day: "numeric"
   });
   const endStr = endDate.toLocaleString("en-US", {
     month: "short",
-    day: "numeric",
+    day: "numeric"
   });
   return `${startStr} - ${endStr}`;
 }
@@ -19,66 +19,51 @@ function calculateCPP(totalAmount, hasSalary) {
   const CPP_RATE = 5.95 / 100;
   const CPP_BASIC_EXEMPTION_ANNUAL = 3500;
   const CPP_MAX_EARNINGS_ANNUAL = 68500;
-  const minSalary = hasSalary
-    ? Math.max(CPP_MAX_EARNINGS_ANNUAL / periods, totalAmount)
-    : totalAmount;
-  const employerCpp =
-    (minSalary - CPP_BASIC_EXEMPTION_ANNUAL / periods) * CPP_RATE;
+  const minSalary = hasSalary ? Math.max(CPP_MAX_EARNINGS_ANNUAL / periods, totalAmount) : totalAmount;
+  const employerCpp = (minSalary - CPP_BASIC_EXEMPTION_ANNUAL / periods) * CPP_RATE;
   return roundUpToTwoDecimals(employerCpp);
 }
 function calculateEEI(totalAmount, hasSalary) {
   const periods = 26;
   const EI_EMPLOYER_RATE = 2.296 / 100;
   const EI_MIN_INSURABLE_EARNINGS_ANNUAL = 63200;
-  const insurableEarnings = hasSalary
-    ? Math.max(EI_MIN_INSURABLE_EARNINGS_ANNUAL / periods, totalAmount)
-    : totalAmount;
+  const insurableEarnings = hasSalary ? Math.max(EI_MIN_INSURABLE_EARNINGS_ANNUAL / periods, totalAmount) : totalAmount;
   const employerEi = insurableEarnings * EI_EMPLOYER_RATE;
   return roundUpToTwoDecimals(employerEi);
 }
 function getEmployeeInvoiceItems(employees, rate) {
   const items = [];
-  for (const employee of employees) {
+  for (const employee of employees){
     const hasSalary = employee.gross_salary ? true : false;
     // Gross salary item
-    employee.gross_salary
-      ? items.push({
-          description: `${employee.employee_name}, GS (${employee.gross_salary_date_range}), CAD ${employee.gross_salary} @ ${rate}`,
-          amount: roundUpToTwoDecimals(employee.gross_salary * rate),
-        })
-      : null;
+    employee.gross_salary ? items.push({
+      description: `${employee.employee_name}, GS (${employee.gross_salary_date_range}), CAD ${employee.gross_salary} @ ${rate}`,
+      amount: roundUpToTwoDecimals(employee.gross_salary * rate)
+    }) : null;
     // ECPP item
     const ecpp = calculateCPP(employee.total_amount, hasSalary);
-    employee.total_amount
-      ? items.push({
-          description: `${employee.employee_name}, ECPP (${employee.gross_salary_date_range}), CAD ${ecpp} @ ${rate}`,
-          amount: roundUpToTwoDecimals(ecpp * rate),
-        })
-      : null;
+    employee.total_amount ? items.push({
+      description: `${employee.employee_name}, ECPP (${employee.gross_salary_date_range}), CAD ${ecpp} @ ${rate}`,
+      amount: roundUpToTwoDecimals(ecpp * rate)
+    }) : null;
     // EEI item
     const eei = calculateEEI(employee.total_amount, hasSalary);
-    employee.total_amount
-      ? items.push({
-          description: `${employee.employee_name}, EEI (${employee.gross_salary_date_range}), CAD ${eei} @ ${rate}`,
-          amount: roundUpToTwoDecimals(eei * rate),
-        })
-      : null;
+    employee.total_amount ? items.push({
+      description: `${employee.employee_name}, EEI (${employee.gross_salary_date_range}), CAD ${eei} @ ${rate}`,
+      amount: roundUpToTwoDecimals(eei * rate)
+    }) : null;
     // RRSP item
-    employee.rrsp
-      ? items.push({
-          description: `${employee.employee_name}, RRSP (${employee.gross_salary_date_range}), CAD ${employee.rrsp} @ ${rate}`,
-          amount: roundUpToTwoDecimals(employee.rrsp * rate),
-        })
-      : null;
+    employee.rrsp ? items.push({
+      description: `${employee.employee_name}, RRSP (${employee.gross_salary_date_range}), CAD ${employee.rrsp} @ ${rate}`,
+      amount: roundUpToTwoDecimals(employee.rrsp * rate)
+    }) : null;
     // One-time payment items
-    for (const oneTimePayment of employee.one_time_payments) {
+    for (const oneTimePayment of employee.one_time_payments){
       if (oneTimePayment.amount > 0) {
-        const paymentTypeString = oneTimePayment.payment_type
-          .slice(0, 2)
-          .toUpperCase();
+        const paymentTypeString = oneTimePayment.payment_type.slice(0, 2).toUpperCase();
         items.push({
           description: `${employee.employee_name}, ${paymentTypeString} (${oneTimePayment.date_range}), CAD ${oneTimePayment.amount} @ ${rate}`,
-          amount: roundUpToTwoDecimals(oneTimePayment.amount * rate),
+          amount: roundUpToTwoDecimals(oneTimePayment.amount * rate)
         });
       }
     }
@@ -86,9 +71,7 @@ function getEmployeeInvoiceItems(employees, rate) {
   return items;
 }
 function getEmployeeId(employee) {
-  return (
-    employee.team_member_id || `${employee.first_name}_${employee.last_name}`
-  );
+  return employee.team_member_id || `${employee.first_name}_${employee.last_name}`;
 }
 function createCompanyData(company) {
   return {
@@ -99,7 +82,7 @@ function createCompanyData(company) {
     billing_email: company.billing_email,
     employees: new Map(),
     paystubIds: [],
-    oneTimePaymentIds: [],
+    oneTimePaymentIds: []
   };
 }
 function createEmployeeData(employee) {
@@ -109,7 +92,7 @@ function createEmployeeData(employee) {
     gross_salary: 0,
     rrsp: 0,
     gross_salary_date_range: "",
-    one_time_payments: [],
+    one_time_payments: []
   };
 }
 function getOrCreateCompany(companiesMap, company) {
@@ -126,31 +109,22 @@ function getOrCreateEmployee(companyData, employee) {
   return companyData.employees.get(employeeId);
 }
 function processPaystubs(companiesMap, paystubs, topups) {
-  for (const paystub of paystubs) {
+  for (const paystub of paystubs){
     const employee = paystub.employee;
     const company = employee.company;
     const companyData = getOrCreateCompany(companiesMap, company);
     const employeeData = getOrCreateEmployee(companyData, employee);
     companyData.paystubIds.push(paystub.id);
     employeeData.gross_salary += paystub.gross_salary;
-    if (
-      employee.rrsp_plan &&
-      topups.some((topup) => topup.team_member_id === employee.team_member_id)
-    ) {
-      if (employee.rrsp_plan.type == "percentage")
-        employeeData.rrsp = roundUpToTwoDecimals(
-          employeeData.gross_salary * (employee.rrsp_plan.amount / 100)
-        );
+    if (employee.rrsp_plan && topups.some((topup)=>topup.team_member_id === employee.team_member_id)) {
+      if (employee.rrsp_plan.type == "percentage") employeeData.rrsp = roundUpToTwoDecimals(employeeData.gross_salary * (employee.rrsp_plan.amount / 100));
       else employeeData.rrsp = employee.rrsp_plan.amount;
     }
-    employeeData.gross_salary_date_range = formatDateRange(
-      paystub.payroll_schedule.start_date,
-      paystub.payroll_schedule.end_date
-    );
+    employeeData.gross_salary_date_range = formatDateRange(paystub.payroll_schedule.start_date, paystub.payroll_schedule.end_date);
   }
 }
 function processOneTimePayments(companiesMap, oneTimePayments) {
-  for (const oneTimePayment of oneTimePayments) {
+  for (const oneTimePayment of oneTimePayments){
     const employee = oneTimePayment.employee;
     const company = employee.company;
     const companyData = getOrCreateCompany(companiesMap, company);
@@ -159,29 +133,18 @@ function processOneTimePayments(companiesMap, oneTimePayments) {
     employeeData.one_time_payments.push({
       payment_type: oneTimePayment.payment_type,
       amount: roundUpToTwoDecimals(oneTimePayment.amount),
-      date_range: formatDateRange(
-        oneTimePayment.payroll_schedule.start_date,
-        oneTimePayment.payroll_schedule.end_date
-      ),
+      date_range: formatDateRange(oneTimePayment.payroll_schedule.start_date, oneTimePayment.payroll_schedule.end_date)
     });
     if (!employeeData.gross_salary_date_range) {
-      employeeData.gross_salary_date_range = formatDateRange(
-        oneTimePayment.payroll_schedule.start_date,
-        oneTimePayment.payroll_schedule.end_date
-      );
+      employeeData.gross_salary_date_range = formatDateRange(oneTimePayment.payroll_schedule.start_date, oneTimePayment.payroll_schedule.end_date);
     }
   }
 }
 function convertEmployeeData(employeeData) {
   const grossSalary = roundUpToTwoDecimals(employeeData.gross_salary);
   const rrsp = roundUpToTwoDecimals(employeeData.rrsp);
-  const oneTimePaymentsTotal = employeeData.one_time_payments.reduce(
-    (sum, payment) => sum + payment.amount,
-    0
-  );
-  const totalAmount = roundUpToTwoDecimals(
-    grossSalary + oneTimePaymentsTotal + rrsp
-  );
+  const oneTimePaymentsTotal = employeeData.one_time_payments.reduce((sum, payment)=>sum + payment.amount, 0);
+  const totalAmount = roundUpToTwoDecimals(grossSalary + oneTimePaymentsTotal + rrsp);
   return {
     employee_id: employeeData.employee_id,
     employee_name: employeeData.employee_name,
@@ -189,15 +152,13 @@ function convertEmployeeData(employeeData) {
     gross_salary: grossSalary,
     rrsp: rrsp,
     gross_salary_date_range: employeeData.gross_salary_date_range,
-    one_time_payments: employeeData.one_time_payments,
+    one_time_payments: employeeData.one_time_payments
   };
 }
 function convertToResultFormat(companiesMap, rate) {
   const result = [];
-  for (const companyData of companiesMap.values()) {
-    const employees = Array.from(companyData.employees.values()).map(
-      (employeeData) => convertEmployeeData(employeeData)
-    );
+  for (const companyData of companiesMap.values()){
+    const employees = Array.from(companyData.employees.values()).map((employeeData)=>convertEmployeeData(employeeData));
     result.push({
       company_id: companyData.company_id,
       company_name: companyData.company_name,
@@ -206,7 +167,7 @@ function convertToResultFormat(companiesMap, rate) {
       billing_email: companyData.billing_email,
       employees: employees,
       paystubIds: companyData.paystubIds,
-      oneTimePaymentIds: companyData.oneTimePaymentIds,
+      oneTimePaymentIds: companyData.oneTimePaymentIds
     });
   }
   return result;
@@ -216,14 +177,14 @@ export function groupByCompany(paystubs, oneTimePayments, rate, topups) {
   processPaystubs(companiesMap, paystubs, topups);
   processOneTimePayments(companiesMap, oneTimePayments);
   const result = convertToResultFormat(companiesMap, rate);
-  return result.map((company) => ({
-    company_id: company.company_id,
-    company_name: company.company_name,
-    company_stripe_id: company.company_stripe_id || null,
-    payment_method: company.payment_method,
-    billing_email: company.billing_email || null,
-    invoices: getEmployeeInvoiceItems(company.employees, rate),
-    paystubIds: company.paystubIds,
-    oneTimePaymentIds: company.oneTimePaymentIds,
-  }));
+  return result.map((company)=>({
+      company_id: company.company_id,
+      company_name: company.company_name,
+      company_stripe_id: company.company_stripe_id || null,
+      payment_method: company.payment_method,
+      billing_email: company.billing_email || null,
+      invoices: getEmployeeInvoiceItems(company.employees, rate),
+      paystubIds: company.paystubIds,
+      oneTimePaymentIds: company.oneTimePaymentIds
+    }));
 }

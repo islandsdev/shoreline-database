@@ -1,30 +1,29 @@
 import { getConfig } from "./config.ts";
+import { ENV } from "./.envs.ts";
 const config = getConfig();
-export async function createInvoiceAndItems(
-  STRIPE_API_KEY1,
-  customerId,
-  items
-) {
+export async function createInvoiceAndItems(customerId, items) {
   try {
-    let invoice = await createInvoice(STRIPE_API_KEY1, customerId);
-    await createInvoiceItems(STRIPE_API_KEY1, customerId, invoice, items);
-    invoice = await finalizeAndPayInvoice(STRIPE_API_KEY1, invoice);
+    let invoice = await createInvoice(customerId);
+    await createInvoiceItems(customerId, invoice, items);
+    invoice = await finalizeInvoice(invoice);
     return invoice;
   } catch (error) {
     console.error(`Error creating invoice for customer ${customerId}:`, error);
     throw new Error(`Invoice creation failed: ${error.message}`);
   }
 }
-export async function createInvoice(STRIPE_API_KEY1, customerId) {
+export async function createInvoice(customerId) {
   const body = new URLSearchParams({
     customer: customerId,
+    // collection_method: "send_invoice",
+    // days_until_due: "1",
     collection_method: "charge_automatically",
     auto_advance: "true",
   });
   const res = await fetch("https://api.stripe.com/v1/invoices", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${STRIPE_API_KEY1}`,
+      Authorization: `Bearer ${ENV.STRIPE_API_KEY}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body,
@@ -37,12 +36,7 @@ export async function createInvoice(STRIPE_API_KEY1, customerId) {
   }
   return data;
 }
-export async function createInvoiceItems(
-  STRIPE_API_KEY1,
-  customerId,
-  invoice,
-  items
-) {
+export async function createInvoiceItems(customerId, invoice, items) {
   try {
     for (const item of items) {
       const body = new URLSearchParams({
@@ -55,7 +49,7 @@ export async function createInvoiceItems(
       const res = await fetch("https://api.stripe.com/v1/invoiceitems", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${STRIPE_API_KEY1}`,
+          Authorization: `Bearer ${ENV.STRIPE_API_KEY}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body,
@@ -76,15 +70,15 @@ export async function createInvoiceItems(
     throw new Error(`Invoice items creation failed: ${error.message}`);
   }
 }
-export async function finalizeAndPayInvoice(STRIPE_API_KEY, invoice) {
+export async function finalizeInvoice(invoice) {
   try {
-    // Step 1: Finalize the invoice
+    // Finalize the invoice (this will send it to the customer for manual payment)
     const finalizeRes = await fetch(
       `https://api.stripe.com/v1/invoices/${invoice.id}/finalize`,
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${STRIPE_API_KEY}`,
+          Authorization: `Bearer ${ENV.STRIPE_API_KEY}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
       }
@@ -96,30 +90,14 @@ export async function finalizeAndPayInvoice(STRIPE_API_KEY, invoice) {
           `Invoice finalization failed with status ${finalizeRes.status}`
       );
     }
-    // Step 2: Attempt to pay the invoice immediately
-    const payRes = await fetch(
-      `https://api.stripe.com/v1/invoices/${invoice.id}/pay`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${STRIPE_API_KEY}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
-    );
-    const payData = await payRes.json();
-    if (!payRes.ok) {
-      throw new Error(
-        payData.error?.message ||
-          `Invoice payment failed with status ${payRes.status}`
-      );
-    }
-
-    const x = { ...payData, invoice_link: payData.hosted_invoice_url };
-
-    return x;
+    const finalizeData = await finalizeRes.json();
+    // Return the finalized invoice with the invoice link
+    return {
+      ...finalizeData,
+      invoice_link: finalizeData.hosted_invoice_url,
+    };
   } catch (error) {
-    console.error(`Error finalizing/sending invoice ${invoice.id}:`, error);
-    throw new Error(`Invoice finalization/payment failed: ${error.message}`);
+    console.error(`Error finalizing invoice ${invoice.id}:`, error);
+    throw new Error(`Invoice finalization failed: ${error.message}`);
   }
 }
