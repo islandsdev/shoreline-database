@@ -19,7 +19,9 @@ export const ENV = {
   MAX_RETRIES: parseInt(Deno.env.get("MAX_RETRIES") || "3"),
   RETRY_DELAY: parseInt(Deno.env.get("RETRY_DELAY") || "1000"),
   // Stripe Invoice Configuration
-  STRIPE_INVOICE_DAYS_UNTIL_DUE: parseInt(Deno.env.get("STRIPE_INVOICE_DAYS_UNTIL_DUE") || "7"),
+  STRIPE_INVOICE_DAYS_UNTIL_DUE: parseInt(
+    Deno.env.get("STRIPE_INVOICE_DAYS_UNTIL_DUE") || "7"
+  ),
   STRIPE_CURRENCY: Deno.env.get("STRIPE_CURRENCY") || "usd",
   // Logging Configuration
   ENABLE_DEBUG_LOGGING: Deno.env.get("ENABLE_DEBUG_LOGGING") === "true",
