@@ -18,7 +18,7 @@ export class DatabaseService {
     return data;
   }
   async prepareMissingPayments(teamMemberId) {
-    let query = this.supabase.from("team_members").select("*").eq("status", "approved");
+    let query = this.supabase.from("team_members").select("*").eq("status", "approved").eq("is_active", true);
     if (teamMemberId) {
       query = query.eq("team_member_id", teamMemberId);
     }
