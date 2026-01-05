@@ -31,11 +31,6 @@ export async function createWiseInvoice(items, companyName, companyEmail) {
         tax: null,
         rank: index,
       };
-      console.log(`Line item ${index}:`, {
-        name: lineItem.name,
-        value: lineItem.unitPrice.value,
-        currency: lineItem.unitPrice.currency,
-      });
       return lineItem;
     });
     const issueDate = new Date();
