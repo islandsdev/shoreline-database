@@ -48,10 +48,10 @@ export class DatabaseService {
       team_member_id,
       first_name,
       last_name,
+      employment_type,
       company:company_id (
         id,
         legal_name,
-        payment_method,
         customer_stripe_id,
         billing_email
       ),
@@ -88,6 +88,7 @@ export class DatabaseService {
       team_member_id,
       first_name,
       last_name,
+      employment_type,
       company:company_id (
         id,
         legal_name,
