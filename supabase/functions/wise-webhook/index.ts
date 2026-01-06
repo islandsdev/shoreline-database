@@ -14,6 +14,192 @@ import { ENV } from "./.envs.ts";
   // Only "paid" maps to "paid", everything else is "processing"
   return normalizedStatus === "paid" ? "paid" : "processing";
 }
+
+async function findCandidateInvoices(
+  supabase,
+  amount,
+  timeWindowStart,
+  timeWindowEnd
+) {
+  // Query from invoices and join to wise_invoices for better filtering and ordering
+  const { data, error } = await supabase
+    .from("invoices")
+    .select(
+      `
+      id,
+      amount,
+      status,
+      created_at,
+      provider,
+      wise_invoices!inner (
+        id,
+        wise_invoice_id,
+        payment_request_id,
+        profile_id
+      )
+    `
+    )
+    .eq("provider", "Wise")
+    .eq("status", "processing")
+    .eq("amount", amount)
+    .gte("created_at", timeWindowStart.toISOString())
+    .lte("created_at", timeWindowEnd.toISOString())
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("❌ Error finding candidate invoices:", error);
+    return [];
+  }
+  // Transform the data to match expected structure
+  return (
+    data?.map((item) => ({
+      id: item.id,
+      amount: item.amount,
+      status: item.status,
+      created_at: item.created_at,
+      wise_invoices: item.wise_invoices || [],
+    })) || []
+  );
+}
+
+async function verifyInvoiceViaWiseAPI(paymentRequestId) {
+  try {
+    const profileId = ENV.WISE_PROFILE_ID;
+    if (!profileId) {
+      console.error("❌ WISE_PROFILE_ID not configured");
+      return false;
+    }
+    const response = await fetch(
+      `https://wise.com/gateway/v2/profiles/${profileId}/acquiring/payment-requests/${paymentRequestId}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${ENV.WISE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    if (!response.ok) {
+      console.error(
+        `❌ Wise API error: ${response.status} ${response.statusText}`
+      );
+      return false;
+    }
+    const paymentRequest = await response.json();
+    console.log(">>>>>>>>:", paymentRequest);
+    return paymentRequest.status === "COMPLETED";
+  } catch (error) {
+    console.error("❌ Error verifying invoice via Wise API:", error);
+    return false;
+  }
+}
+/**
+ * Updates invoice and related records to paid status
+ * @param supabase - Supabase client
+ * @param invoiceId - Invoice ID to update
+ */
+async function updateInvoiceToPaid(supabase, invoiceId) {
+  // Check if already paid (idempotency)
+  const { data: currentInvoice } = await supabase
+    .from("invoices")
+    .select("status")
+    .eq("id", invoiceId)
+    .single();
+  if (currentInvoice && currentInvoice.status === "paid") {
+    console.log(
+      `ℹ️ Invoice ${invoiceId} already marked as paid, skipping update`
+    );
+    return;
+  }
+  // Update invoice status
+  const { error: invoiceError } = await supabase
+    .from("invoices")
+    .update({
+      status: "paid",
+    })
+    .eq("id", invoiceId);
+  if (invoiceError) {
+    console.error("❌ Failed to update invoice:", invoiceError);
+    throw invoiceError;
+  }
+  // Update payments
+  await supabase
+    .from("payments")
+    .update({
+      status: "paid",
+    })
+    .eq("invoice_id", invoiceId);
+  // Update one-time payments
+  await supabase
+    .from("wip_one_time_payments")
+    .update({
+      status: "paid",
+    })
+    .eq("invoice_id", invoiceId);
+  console.log(
+    `✅ Updated invoice ${invoiceId} and related records to paid status`
+  );
+}
+/**
+ * Handles balance credit webhook events
+ * @param supabase - Supabase client
+ * @param webhookData - Balance credit webhook data
+ */
+async function handleBalanceCreditEvent(supabase, webhookData) {
+  const { amount, currency, occurred_at, resource } = webhookData.data;
+  console.log("💰 Processing balance credit webhook:", {
+    amount,
+    currency,
+    occurred_at,
+  });
+  // Calculate time window (±2 hours from payment time)
+  const paymentTime = new Date(occurred_at);
+  const timeWindowStart = new Date(paymentTime.getTime() - 2 * 60 * 60 * 1000);
+  const timeWindowEnd = new Date(paymentTime.getTime() + 2 * 60 * 60 * 1000);
+  // Find candidate invoices
+  const candidates = await findCandidateInvoices(
+    supabase,
+    amount,
+    timeWindowStart,
+    timeWindowEnd
+  );
+  console.log(`🔍 Found ${candidates.length} candidate invoice(s)`);
+  if (candidates.length === 0) {
+    console.warn(
+      `⚠️ No candidate invoices found for amount ${amount}, time window ${timeWindowStart.toISOString()} to ${timeWindowEnd.toISOString()}`
+    );
+    return;
+  }
+  // Process each candidate until we find a paid one
+  for (const candidate of candidates) {
+    const wiseInvoice = candidate.wise_invoices[0];
+    if (!wiseInvoice || !wiseInvoice.payment_request_id) {
+      console.warn(
+        `⚠️ Candidate invoice ${candidate.id} missing payment_request_id, skipping`
+      );
+      continue;
+    }
+    console.log(
+      `🔎 Verifying invoice ${candidate.id} (payment_request_id: ${wiseInvoice.payment_request_id})`
+    );
+    const isPaid = await verifyInvoiceViaWiseAPI(
+      wiseInvoice.payment_request_id
+    );
+    if (isPaid) {
+      console.log(
+        `✅ Verified invoice ${candidate.id} is paid via Wise API, updating status`
+      );
+      await updateInvoiceToPaid(supabase, candidate.id);
+      return; // Found and updated, stop processing
+    } else {
+      console.log(
+        `ℹ️ Invoice ${candidate.id} not confirmed as paid via Wise API, checking next candidate`
+      );
+    }
+  }
+  console.warn(
+    `⚠️ No invoices verified as paid among ${candidates.length} candidate(s)`
+  );
+}
 serve(async (req) => {
   const supabase = createClient(
     ENV.SUPABASE_URL,
@@ -21,6 +207,17 @@ serve(async (req) => {
   );
   const rawBody = await req.text();
   const payload = JSON.parse(rawBody);
+  // Handle balance credit events (no payment request ID provided)
+  const eventType = payload.event_type || payload.eventType;
+  if (eventType === "balances#credit") {
+    console.log("💰 Received balances#credit webhook");
+    try {
+      await handleBalanceCreditEvent(supabase, payload);
+    } catch (error) {
+      console.error("❌ Error handling balance credit event:", error);
+      // Don't fail the webhook, just log the error
+    }
+  }
   // Handle payment request events
   if (
     payload.eventType === "payment_request.status_changed" ||
