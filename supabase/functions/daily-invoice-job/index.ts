@@ -17,6 +17,13 @@ async function handler(req) {
     });
   }
   try {
+    return jsonResponse(
+      {
+        message: "CRON JOB PAUSED",
+        total_processed: 0,
+      },
+      200
+    );
     const dbService = new DatabaseService(ENV.SUPABASE_URL, ENV.SUPABASE_KEY);
     // Fetch data concurrently
     const scheduleIds = await dbService.getScheduleIds();
