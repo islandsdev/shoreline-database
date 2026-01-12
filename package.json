@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "description": "This is the migrations repo for shorelines project",
   "scripts": {
+    "db:production:diff": "supabase link --project-ref krzhosadvjdetijqvggz && supabase db push",
     "db:production:push": "supabase link --project-ref krzhosadvjdetijqvggz && supabase db push",
     "functions:production:download": "supabase link --project-ref krzhosadvjdetijqvggz && for fn in create-checkout-page create-hellosign-document daily-invoice-job generate-payments hellosign-webhook impersonate Invoice-status-sync send-email send-plan-request subscription-status-sync test-upload-document upload-document wise-webhook; do supabase functions download $fn; done",
     "functions:production:deploy": "supabase link --project-ref krzhosadvjdetijqvggz && for fn in create-checkout-page create-hellosign-document daily-invoice-job generate-payments hellosign-webhook impersonate Invoice-status-sync send-email send-plan-request subscription-status-sync test-upload-document upload-document wise-webhook; do supabase functions deploy --no-verify-jwt $fn; done",
+    "db:staging:diff": "supabase link --project-ref oqbkhzrfguyyxktqxwxl && supabase db push",
     "db:staging:push": "supabase link --project-ref oqbkhzrfguyyxktqxwxl && supabase db push",
     "functions:staging:download": "supabase link --project-ref oqbkhzrfguyyxktqxwxl && for fn in create-checkout-page create-hellosign-document daily-invoice-job generate-payments hellosign-webhook impersonate Invoice-status-sync send-email send-plan-request subscription-status-sync test-upload-document upload-document wise-webhook; do supabase functions download $fn; done",
     "functions:staging:deploy": "supabase link --project-ref oqbkhzrfguyyxktqxwxl && for fn in create-checkout-page create-hellosign-document daily-invoice-job generate-payments hellosign-webhook impersonate Invoice-status-sync send-email send-plan-request subscription-status-sync test-upload-document upload-document wise-webhook; do supabase functions deploy --no-verify-jwt $fn; done"
