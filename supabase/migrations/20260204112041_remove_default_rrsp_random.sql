@@ -1,0 +1,1 @@
+alter table "public"."rrsp_plans" alter column "team_member_id" drop default;
