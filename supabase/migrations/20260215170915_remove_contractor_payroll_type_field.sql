@@ -1,0 +1,1 @@
+alter table "public"."team_members" drop column "contractor_payment_schedule"
