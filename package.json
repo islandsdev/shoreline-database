@@ -2,6 +2,10 @@
   "name": "shoreline-database",
   "version": "1.0.0",
   "description": "This is the migrations repo for shorelines project",
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "node-fetch": "^3.3.2"
+  },
   "scripts": {
     "db:production:diff": "supabase link --project-ref krzhosadvjdetijqvggz && supabase db diff",
     "db:production:push": "supabase link --project-ref krzhosadvjdetijqvggz && supabase db push",
