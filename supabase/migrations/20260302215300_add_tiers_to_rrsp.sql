@@ -1,0 +1,1 @@
+alter table "public"."rrsp_plans" add column "tiers" jsonb not null default '[]'::jsonb;
