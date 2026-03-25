@@ -1,0 +1,2 @@
+ALTER TABLE companies 
+ALTER COLUMN use_ach SET DEFAULT true;
