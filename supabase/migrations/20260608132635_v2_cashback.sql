@@ -1,0 +1,1 @@
+DROP TRIGGER IF EXISTS trigger_accrue_cashback ON payments;
