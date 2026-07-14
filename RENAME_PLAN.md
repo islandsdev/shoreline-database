@@ -11,7 +11,15 @@ across all four repos (`shoreline-vite`, `shoreline-nextjs`, `shoreline-database
 > ⚠️ **SCHEMA DRIFT — this plan was derived from the Vite `types.ts`, which is STALE.** Phase 2
 > investigation proved the live schema differs. **Re-validate every remaining phase against the
 > authoritative `shoreline-database/types.ts` (regenerated from the live DB) before drafting its
-> migration.** Confirmed drifts so far:
+> migration.**
+>
+> **Baseline: `shoreline-database/types.ts` was regenerated from live PRODUCTION
+> (`krzhosadvjdetijqvggz`) on 2026-07-14 and Phases 1–5 column/enum targets validated against it.**
+> Phases 1–3 are deployed to production (renames present; Phase 2 `id`+`team_member_id`/`address_id`
+> mirror columns live; Phase 1 compat views still present). Staging (`oqbkhzrfguyyxktqxwxl`) is under a
+> different Supabase org not accessible from this login — validate it separately before its deploy.
+> Corrections applied this pass: §2 doc tables (`documents` ≠ `new_documents`); §5 `invoice_type_enum`
+> added / `Access` enum absent. Confirmed drifts so far:
 > - `cashback_config` rate columns are `tech_employee_rate` / `tech_contractor_rate` (NOT the
 >   plan's `tech_employee_rate` / `non_tech_employee_rate`). §3 is wrong for this table.
 > - `approve_team_member()` already references `id` (a column that didn't exist) — Phase 2 fixes it.
@@ -42,8 +50,8 @@ Lock these down so every migration moves toward one target.
 
 | Current | Proposed | Why |
 |---|---|---|
-| `new_documents` | `documents` (after retiring old) | `new_` is not a name |
-| `documents` (legacy) | `legacy_documents` → drop | two doc tables is the worst ambiguity in the schema |
+| `new_documents` | `signature_requests` (✅ done, Phase 1b) | it's the HelloSign **e-signature request lifecycle**, NOT a file store |
+| `documents` | **keep as-is** | the real **document/file store** (files in Supabase Storage) — a distinct table from `new_documents`, NOT legacy. Do **not** rename, merge, or drop it. |
 | `wip_one_time_payments` | `one_time_payments` | drop the `wip_` |
 | `cashback_config` | `cashback_rate_configs` | it's versioned rows (effective_from/to, is_active), so plural |
 
@@ -79,9 +87,11 @@ Optional (bigger lift, see §6): merge `cpp_contributions` + `eei_contributions`
 ## 5. Enum cleanup
 
 - Drop `_enum` suffix: `payment_status_enum` → `payment_status`, `payment_type_enum` → `payment_type`,
-  `plan_name_enum` → `plan_tier`, `topup_type_enum` → `topup_type`.
-- `Access` (PascalCase, `Employee`/`Employer`) → `portal_access`, lowercase values. Distinct from
-  `employment_type`, so keep the type — just rename.
+  `plan_name_enum` → `plan_tier`, `topup_type_enum` → `topup_type`,
+  `invoice_type_enum` (`salary`/`late_fee`) → `invoice_type` (added by the late-fee migration; validated present in live `types.ts` 2026-07-14).
+- ~~`Access` (PascalCase, `Employee`/`Employer`) → `portal_access`~~ — **NOT PRESENT in live production**
+  (validated against regenerated `types.ts` 2026-07-14; no `Access` enum exists — it came from the stale
+  vite `types.ts`). Drop this item unless a later check finds it in staging.
 - **Value casing**: standardize on lowercase (`payment_status` already is). This is the **riskiest**
   change — `ALTER TYPE ... RENAME VALUE` plus updating every comparison in code. Do it last and isolated.
 - `payment_type_enum` (`Debit`/`Credit`) is not referenced by any table — confirm it's dead before renaming.
@@ -246,6 +256,14 @@ type/boolean conversions and enum value changes need real data migrations and ca
       *over-reach* (renaming a FK ref like `payments.team_member_id`) would be a silent bug —
       so when unsure, leave it. The string `team_member_id` is the correct FK column name on
       ~9 child tables and a pervasive app-layer domain field; those do NOT change.
+      **APP CODEMOD DONE (2026-07-14):** shoreline-nextjs branch `chore/db-rename-phase2-call-sites`
+      (commit 71b33d1) renames all `team_members`/`addresses` PK refs (incl. `address_id`) to `id`
+      across 26 source + 3 test files (101/101 symmetric rename). Verified: every residual
+      `team_member_id`/`address_id` in source targets a child-table FK / relationship hint / route
+      param / domain field (audited by nearest `.from()`); `tsc` clean; full jest suite green except
+      the pre-existing `custom-data.test.ts` failure (identical on baseline). NOT yet pushed/PR'd/
+      deployed. **Step B precondition is met once this branch is deployed** — then move
+      `deferred-migrations/20260622190001` back into `migrations/` (re-timestamped) to drop the mirrors.
 - [~] **Phase 3 (S–M)** — column renames. **Cannot use the Phase-2 shim**: these columns are
       app-WRITTEN, so a GENERATED mirror breaks inserts/updates and a view can't share the table
       name. But the names are UNAMBIGUOUS, so this is a **coordinated rename + mechanical codemod**
