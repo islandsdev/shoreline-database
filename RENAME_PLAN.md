@@ -256,6 +256,15 @@ type/boolean conversions and enum value changes need real data migrations and ca
       *over-reach* (renaming a FK ref like `payments.team_member_id`) would be a silent bug —
       so when unsure, leave it. The string `team_member_id` is the correct FK column name on
       ~9 child tables and a pervasive app-layer domain field; those do NOT change.
+      **FRONTEND (shoreline-vite) = NO-OP for Phase 2 (verified 2026-07-14):** zero
+      `.from("team_members")`/`.from("addresses")` queries, zero `Tables<'team_members'>`/`Database[...]`
+      generic usage, zero `address_id` refs. All ~60 `team_member_id` refs are local-interface fields,
+      reads off `apiClient` responses, or FK payloads/route params sent TO the backend. Since the backend
+      API contract PRESERVES the `team_member_id` JSON field (only its source value changed to `id`),
+      the frontend stays valid — and a rename there would BREAK it (interfaces would stop matching the
+      API; `body.team_member_id` payloads would stop matching the endpoints). So: **do NOT codemod the
+      frontend.** When the mirror finally drops, the only frontend action is regenerating the (gitignored)
+      generated Supabase types — a build artifact refresh, no source change.
       **APP CODEMOD DONE (2026-07-14):** shoreline-nextjs branch `chore/db-rename-phase2-call-sites`
       (commit 71b33d1) renames all `team_members`/`addresses` PK refs (incl. `address_id`) to `id`
       across 26 source + 3 test files (101/101 symmetric rename). Verified: every residual
