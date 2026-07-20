@@ -26,6 +26,24 @@ across all four repos (`shoreline-vite`, `shoreline-nextjs`, `shoreline-database
 > - `team_members` has `is_active`, `hours_per_week`, `qb_employee_id`, `terminated_at`,
 >   `termination_*` columns not in the original plan; `address` (free text) coexists with
 >   `address_id` (FK). Re-check §3/§4 column lists against the live table.
+>
+> **2026-07-17 status update:**
+> - **`invoices` was renamed to `salary_invoices`** (migration `20260717000000`, PR #37), out of
+>   band from this plan, to make room for a new `subscription_invoices` table. A DEPRECATED
+>   auto-updatable compat view `public.invoices` was left behind (same shim pattern as Phase 1);
+>   shoreline-nextjs still has ~11 `.from("invoices")` call sites, so that view must STAY until
+>   they migrate. NB: Phase 3 (`invoice_link`→`hosted_url`, `invoice_number`→`number`) already
+>   applied to the table *before* this rename, so those columns now live on `salary_invoices`.
+> - **Phase 1 compat views DROPPED** — migration `20260717000002_phase1_drop_compat_views.sql`
+>   drops `wip_one_time_payments` + `new_documents` (call sites verified migrated in all repos).
+> - **Phase 2 app codemod is deployed** to shoreline-nextjs `main` + `staging` (PR #89).
+> - **Phase 2 Step B PROMOTED** — `deferred-migrations/20260622190001` moved into
+>   `supabase/migrations/20260717000003_phase2_drop_pk_shims.sql`: drops the `team_member_id` /
+>   `address_id` mirror columns and repoints the team_members trigger functions to `id`.
+>   `accrue_cashback` is DROPPED (dead — its trigger was removed by `v2_cashback`) rather than
+>   recreated from the stale body. **Best-effort**: promoted without live `pg_proc` introspection
+>   (Docker/psql unavailable here) — the header carries a verification query to run before
+>   `db:*:push`.
 
 ---
 
@@ -50,9 +68,10 @@ Lock these down so every migration moves toward one target.
 
 | Current | Proposed | Why |
 |---|---|---|
-| `new_documents` | `signature_requests` (✅ done, Phase 1b) | it's the HelloSign **e-signature request lifecycle**, NOT a file store |
+| `new_documents` | `signature_requests` (✅ done, Phase 1b; compat view dropped `20260717000002`) | it's the HelloSign **e-signature request lifecycle**, NOT a file store |
 | `documents` | **keep as-is** | the real **document/file store** (files in Supabase Storage) — a distinct table from `new_documents`, NOT legacy. Do **not** rename, merge, or drop it. |
-| `wip_one_time_payments` | `one_time_payments` | drop the `wip_` |
+| `invoices` | `salary_invoices` (✅ done `20260717000000`, out of plan) | disambiguate from the new `subscription_invoices` table; compat view `invoices` still live until ~11 nextjs call sites migrate |
+| `wip_one_time_payments` | `one_time_payments` (✅ done, Phase 1a; compat view dropped `20260717000002`) | drop the `wip_` |
 | `cashback_config` | `cashback_rate_configs` | it's versioned rows (effective_from/to, is_active), so plural |
 
 Optional (bigger lift, see §6): merge `cpp_contributions` + `eei_contributions`.
@@ -196,15 +215,15 @@ type/boolean conversions and enum value changes need real data migrations and ca
       `wip_one_time_payments_*` on the renamed table), behind a deprecated compat view.
       Drafted: `supabase/migrations/20260622180000_phase1_rename_one_time_payments.sql`.
       Call sites migrated: 13 `.from(...)` + 1 log label, branch
-      `chore/db-rename-phase1-call-sites` in shoreline-nextjs. Remaining: deploy (see ordering
-      below), then drop the compat view.
+      `chore/db-rename-phase1-call-sites` in shoreline-nextjs. **DONE**: deployed; compat view
+      `wip_one_time_payments` dropped by `20260717000002_phase1_drop_compat_views.sql`.
 - [x] **Phase 1b — `new_documents` → `signature_requests`** (investigated; it's the HelloSign
       e-signature request lifecycle, **not** a file store — `documents` keeps its name). Same
       compat-view pattern as 1a. Drafted:
       `supabase/migrations/20260622180001_phase1_rename_signature_requests.sql`.
       Call sites migrated: 5 `.from("new_documents")` → `signature_requests`, same branch
-      `chore/db-rename-phase1-call-sites`. Remaining: deploy (see ordering below), then drop the
-      compat view.
+      `chore/db-rename-phase1-call-sites`. **DONE**: deployed; compat view `new_documents` dropped
+      by `20260717000002_phase1_drop_compat_views.sql`.
       **Note: `types.ts` is stale for this table** — it's missing the `signature_request_id`
       column the code reads/writes; regenerate.
       Deferred column cleanups (later phases, not in the rename migration):
@@ -228,10 +247,17 @@ type/boolean conversions and enum value changes need real data migrations and ca
      FE + BE Phase 3 changes are coupled and must go together.
   5. Smoke-test staging (payroll/invoice/cashback flows, signup, company setup, invoices list).
   6. Repeat 1–5 for **production**.
-  7. Later / paced: do the Phase 2 app codemod (`team_member_id`→`id`), then move
-     `deferred-migrations/20260622190001` back into `migrations/` (re-timestamped) to drop the
-     mirrors. Separately, drop the Phase 1 compat views (`wip_one_time_payments`, `new_documents`)
-     once their call sites are confirmed migrated.
+  7. Later / paced:
+     - ✅ Phase 2 app codemod (`team_member_id`→`id`) done + deployed to nextjs `main` + `staging`
+       (PR #89).
+     - ✅ Phase 1 compat views (`wip_one_time_payments`, `new_documents`) dropped —
+       `20260717000002_phase1_drop_compat_views.sql` (call sites confirmed migrated in all repos).
+     - ✅ Phase 2 Step B (drop the PK mirrors) PROMOTED to
+       `supabase/migrations/20260717000003_phase2_drop_pk_shims.sql` (best-effort; `accrue_cashback`
+       dropped as dead). Not yet pushed — run the header's `pg_proc` verification query on the
+       target DB first, then `db:staging:push` / `db:production:push`.
+     - ⏳ New teardown: migrate the ~11 shoreline-nextjs `.from("invoices")` call sites to
+       `salary_invoices`, then drop the `invoices` compat view (`20260717000000`).
 
 - [~] **Phase 2 (XL)** — PK standardization (`team_members.team_member_id` → `id`,
       `addresses.address_id` → `id`). **A deprecation VIEW is impossible** (the table keeps its
@@ -270,9 +296,13 @@ type/boolean conversions and enum value changes need real data migrations and ca
       across 26 source + 3 test files (101/101 symmetric rename). Verified: every residual
       `team_member_id`/`address_id` in source targets a child-table FK / relationship hint / route
       param / domain field (audited by nearest `.from()`); `tsc` clean; full jest suite green except
-      the pre-existing `custom-data.test.ts` failure (identical on baseline). NOT yet pushed/PR'd/
-      deployed. **Step B precondition is met once this branch is deployed** — then move
-      `deferred-migrations/20260622190001` back into `migrations/` (re-timestamped) to drop the mirrors.
+      the pre-existing `custom-data.test.ts` failure (identical on baseline).
+      **DEPLOYED (2026-07-17):** merged via PR #89 to shoreline-nextjs `main` + `staging`
+      (commit 71b33d1). **STEP B PROMOTED (2026-07-17):** now
+      `supabase/migrations/20260717000003_phase2_drop_pk_shims.sql` (best-effort — `accrue_cashback`
+      dropped as dead rather than recreated; run the header's `pg_proc` verification query before
+      `db:*:push`). Once pushed, the only frontend follow-up is regenerating the (gitignored)
+      generated Supabase types.
 - [~] **Phase 3 (S–M)** — column renames. **Cannot use the Phase-2 shim**: these columns are
       app-WRITTEN, so a GENERATED mirror breaks inserts/updates and a view can't share the table
       name. But the names are UNAMBIGUOUS, so this is a **coordinated rename + mechanical codemod**
