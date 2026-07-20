@@ -50,7 +50,7 @@ The database is multi-tenant: every table (except global reference tables) has a
 ### Core Tables
 
 - **`companies`** — tenant root. Holds billing email, Stripe customer IDs (`customer_stripe_id`, `ach_stripe_customer_id`), `use_ach` flag, `reminders_enabled`, and `reminder_days_before_charge`.
-- **`team_members`** — employees and contractors per company. Employment type (`Employee`/`Contractor`), payroll schedule, RRSP plan, contractor-specific fields, and termination fields (`termination_reason`, `termination_effective_date`, `terminated_at`). PK is `team_member_id` (not `id`).
+- **`team_members`** — employees and contractors per company. Employment type (`Employee`/`Contractor`), payroll schedule, RRSP plan, contractor-specific fields, and termination fields (`termination_reason`, `termination_effective_date`, `terminated_at`). PK is `id` (renamed from `team_member_id` in migration `20260622190000`; the compat mirror column was dropped in `20260717000003`). Child tables still name their FK column `team_member_id`, but it references `team_members(id)` — a new FK to this table must target `id`.
 - **`payroll_schedules`** — date ranges for payroll periods (`Monthly` or `Bi-Weekly`).
 - **`payments`** — one row per employee per payroll schedule. Status lifecycle: `upcoming → processing → collected → paid / failed / cancelled`.
 - **`plans`** — company subscription plans (`Essential` / `Professional` / `Enterprise`), billing term, Stripe subscription ID.
